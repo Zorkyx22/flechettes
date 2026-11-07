@@ -1,21 +1,11 @@
-import { exportDocs, ImportError, LIMITS, parseExport } from "../storage/exchange";
 import { BIN_DAYS, type Library } from "../storage/library";
 import type { Meta } from "../storage/store";
 import { S } from "../strings";
 import { el } from "./dom";
-import { confirmDialog, toast } from "./toast";
+import { confirmDialog } from "./toast";
 
 const DAY = 86_400_000;
 const dateFormat = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
-
-function download(name: string, content: string): void {
-  const url = URL.createObjectURL(new Blob([content], { type: "application/json" }));
-  const a = el("a", { href: url, download: name });
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 
 export function createListScreen(opts: { library: Library; open: (id: string) => void }): HTMLElement {
   const { library } = opts;
@@ -23,17 +13,6 @@ export function createListScreen(opts: { library: Library; open: (id: string) =>
   const binList = el("ul", { class: "cards" });
   const binSection = el("section", { class: "bin", hidden: true });
   const binToggle = el("button", { class: "btn quiet" });
-
-  async function exportIds(ids: string[], name: string): Promise<void> {
-    await library.flush();
-    const docs = [];
-    for (const id of ids) {
-      const d = await library.open(id);
-      if (d) docs.push(d);
-    }
-    download(name, exportDocs(docs));
-    toast(S.exportNote);
-  }
 
   function refresh(): void {
     const items = library.list();
@@ -61,7 +40,6 @@ export function createListScreen(opts: { library: Library; open: (id: string) =>
           el("strong", { text: name }),
           el("small", { text: dateFormat.format(m.updatedAt) }),
         ),
-        el("button", { class: "btn quiet", text: S.saveOne, onclick: () => void exportIds([m.id], `${name}.json`) }),
         el("button", {
           class: "btn quiet",
           text: S.deleteText,
@@ -100,22 +78,6 @@ export function createListScreen(opts: { library: Library; open: (id: string) =>
     );
   }
 
-  const fileInput = el("input", { type: "file", accept: ".json,application/json", hidden: true });
-  fileInput.addEventListener("change", async () => {
-    const file = fileInput.files?.[0];
-    fileInput.value = "";
-    if (!file) return;
-    try {
-      if (file.size > LIMITS.fileBytes) throw new ImportError("too large");
-      const count = await library.importDocs(parseExport(await file.text()));
-      toast(S.importDone(count));
-      refresh();
-    } catch (e) {
-      if (e instanceof ImportError) toast(S.importFailed);
-      else throw e;
-    }
-  });
-
   binToggle.addEventListener("click", () => (binSection.hidden = !binSection.hidden));
   binSection.append(el("p", { class: "help", text: S.binHelp }), binList);
 
@@ -133,18 +95,7 @@ export function createListScreen(opts: { library: Library; open: (id: string) =>
       }),
     ),
     list,
-    el(
-      "footer",
-      { class: "tools" },
-      el("button", {
-        class: "btn quiet",
-        text: S.saveAll,
-        onclick: () => void exportIds(library.list().map((m) => m.id), "fléchettes-sauvegarde.json"),
-      }),
-      el("button", { class: "btn quiet", text: S.openBackup, onclick: () => fileInput.click() }),
-      binToggle,
-      fileInput,
-    ),
+    el("footer", { class: "tools" }, binToggle),
     binSection,
   );
   refresh();
