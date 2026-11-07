@@ -164,6 +164,46 @@ describe("auth HTTP flow", () => {
     expect((await call("/api/auth/login", { method: "POST", body: { username: "admin", password: "secret2" } })).status).toBe(200);
   });
 
+  const sampleDoc = (id: string, title: string) => ({
+    id,
+    title,
+    createdAt: 1,
+    updatedAt: 2,
+    textSize: "m",
+    deletedAt: null,
+    tokens: [{ kind: "word", id: "w1", text: title }],
+    overlay: [],
+  });
+
+  it("scopes texts to their owner", async () => {
+    const admin = await call("/api/setup", { method: "POST", body: { username: "admin", password: "secret1" } });
+    const doc = sampleDoc("t1", "Bonjour");
+    expect((await call("/api/texts/t1", { method: "PUT", cookie: admin.cookie, body: doc })).status).toBe(200);
+    expect((await call("/api/texts", { cookie: admin.cookie })).data.texts.map((m: any) => m.id)).toEqual(["t1"]);
+
+    svc.users.create({ username: "kid", password: "pw1234", role: "student", createdBy: null });
+    const kid = await call("/api/auth/login", { method: "POST", body: { username: "kid", password: "pw1234" } });
+    // The student sees none of the admin's texts, cannot read one, and cannot overwrite it.
+    expect((await call("/api/texts", { cookie: kid.cookie })).data.texts).toEqual([]);
+    expect((await call("/api/texts/t1", { cookie: kid.cookie })).status).toBe(404);
+    expect((await call("/api/texts/t1", { method: "PUT", cookie: kid.cookie, body: doc })).status).toBe(403);
+  });
+
+  it("rejects unauthenticated texts access and invalid documents", async () => {
+    const admin = await call("/api/setup", { method: "POST", body: { username: "admin", password: "secret1" } });
+    expect((await call("/api/texts")).status).toBe(401);
+    expect((await call("/api/texts/t1", { method: "PUT", cookie: admin.cookie, body: sampleDoc("other", "X") })).status).toBe(400);
+    expect((await call("/api/texts/zz", { method: "PUT", cookie: admin.cookie, body: { id: "zz", tokens: "nope" } })).status).toBe(400);
+  });
+
+  it("round-trips a text and removes it", async () => {
+    const admin = await call("/api/setup", { method: "POST", body: { username: "admin", password: "secret1" } });
+    await call("/api/texts/t1", { method: "PUT", cookie: admin.cookie, body: sampleDoc("t1", "Salut") });
+    expect((await call("/api/texts/t1", { cookie: admin.cookie })).data.doc.title).toBe("Salut");
+    expect((await call("/api/texts/t1", { method: "DELETE", cookie: admin.cookie })).status).toBe(200);
+    expect((await call("/api/texts/t1", { cookie: admin.cookie })).status).toBe(404);
+  });
+
   it("expires an idle session on the next request", async () => {
     await new Promise<void>((r) => server.close(() => r())); // replace the default-config server
     await start(testConfig({ idleMs: 100 }));

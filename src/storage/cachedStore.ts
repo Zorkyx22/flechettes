@@ -14,16 +14,19 @@ type Op = { id: string; op: "put"; doc: Doc } | { id: string; op: "remove" };
  * On logout the cache and outbox are cleared so a shared computer doesn't leak work (see {@link clear}).
  */
 export class CachedStore implements Store {
-  private syncing = false;
   private rerun = false;
+  private closed = false;
+  private draining: Promise<void> | null = null;
   private retry: ReturnType<typeof setTimeout> | null = null;
+
+  private readonly onOnline = (): void => void this.sync();
 
   constructor(
     private readonly server: Store,
     private readonly db: CacheDb,
     private readonly onStatus: (s: SyncStatus) => void = () => {},
   ) {
-    addEventListener("online", () => void this.sync());
+    addEventListener("online", this.onOnline);
   }
 
   static async open(server: Store, onStatus?: (s: SyncStatus) => void): Promise<CachedStore> {
@@ -83,6 +86,15 @@ export class CachedStore implements Store {
     await this.db.clear();
   }
 
+  /** Release the IndexedDB connection after any in-flight sync, cancelling pending retries. */
+  async close(): Promise<void> {
+    this.closed = true;
+    if (this.retry) clearTimeout(this.retry);
+    removeEventListener("online", this.onOnline);
+    await (this.draining ?? Promise.resolve()).catch(() => {});
+    this.db.close();
+  }
+
   private async overlayOutbox(metas: Meta[]): Promise<Meta[]> {
     const ops = await this.db.allOps();
     if (ops.length === 0) return metas;
@@ -94,44 +106,55 @@ export class CachedStore implements Store {
     return [...byId.values()];
   }
 
-  /** Drain the outbox to the server; stop and schedule a retry on a network failure. */
-  private async sync(): Promise<void> {
-    if (this.syncing) {
+  /**
+   * Drain the outbox to the server. Single-flight: a call made while a drain is running marks a
+   * rerun and returns the SAME promise, so a caller (e.g. {@link flushToServer}) always awaits the
+   * real end of the work, never a partial pass.
+   */
+  private sync(): Promise<void> {
+    if (this.closed) return Promise.resolve();
+    if (this.draining) {
       this.rerun = true;
-      return;
+      return this.draining;
     }
-    this.syncing = true;
-    try {
-      do {
-        this.rerun = false;
-        const ops = await this.db.allOps();
-        if (ops.length === 0) {
-          this.onStatus("saved");
-          break;
-        }
-        this.onStatus("saving");
-        for (const op of ops) {
-          try {
-            if (op.op === "put") await this.server.put(op.doc);
-            else await this.server.remove(op.id);
+    this.draining = this.drain().finally(() => {
+      this.draining = null;
+    });
+    return this.draining;
+  }
+
+  private async drain(): Promise<void> {
+    if (this.retry) {
+      clearTimeout(this.retry);
+      this.retry = null;
+    }
+    do {
+      this.rerun = false;
+      const ops = await this.db.allOps();
+      if (ops.length === 0) {
+        this.onStatus("saved");
+        return;
+      }
+      this.onStatus("saving");
+      for (const op of ops) {
+        try {
+          if (op.op === "put") await this.server.put(op.doc);
+          else await this.server.remove(op.id);
+          await this.db.deleteOp(op.id);
+        } catch (err) {
+          if (err instanceof ApiError) {
+            // Server reached but rejected (should not happen for client-made docs): drop so we
+            // don't retry forever. Anything else (network down): keep it and retry later.
             await this.db.deleteOp(op.id);
-          } catch (err) {
-            if (err instanceof ApiError) {
-              // Server reached but rejected (should not happen for client-made docs): drop so we
-              // don't retry forever. Anything else (network down): keep it and retry later.
-              await this.db.deleteOp(op.id);
-              continue;
-            }
-            this.onStatus("offline");
-            this.scheduleRetry();
-            return;
+            continue;
           }
+          this.onStatus("offline");
+          this.scheduleRetry();
+          return;
         }
-      } while (this.rerun);
-      if ((await this.db.outboxCount()) === 0) this.onStatus("saved");
-    } finally {
-      this.syncing = false;
-    }
+      }
+    } while (this.rerun);
+    if ((await this.db.outboxCount()) === 0) this.onStatus("saved");
   }
 
   private scheduleRetry(): void {
@@ -225,5 +248,9 @@ export class CacheDb {
     tx.objectStore("outbox").clear();
     tx.objectStore("meta").clear();
     return done(tx);
+  }
+
+  close(): void {
+    this.db.close();
   }
 }
