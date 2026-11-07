@@ -3,7 +3,7 @@ import type { Doc, TextSize } from "../model/types";
 import type { Meta } from "../storage/store";
 import { hashPassword, newSessionId } from "./auth";
 import type { DB } from "./db";
-import type { Role, User } from "./types";
+import type { Class, Role, User } from "./types";
 
 export function newId(): string {
   return randomBytes(12).toString("hex");
@@ -211,5 +211,45 @@ export class Texts {
 
   remove(ownerId: string, id: string): void {
     this.db.prepare("DELETE FROM texts WHERE id = ? AND owner_id = ?").run(id, ownerId);
+  }
+}
+
+type ClassRow = { id: string; teacher_id: string; name: string };
+const toClass = (r: ClassRow): Class => ({ id: r.id, teacherId: r.teacher_id, name: r.name });
+
+/** Classes a teacher groups their students into. A student belongs to at most one class for now. */
+export class Classes {
+  constructor(
+    private readonly db: DB,
+    private readonly now: () => number = Date.now,
+  ) {}
+
+  create(teacherId: string, name: string): Class {
+    const id = newId();
+    this.db.prepare("INSERT INTO classes (id, teacher_id, name, created_at) VALUES (?, ?, ?, ?)").run(id, teacherId, name, this.now());
+    return { id, teacherId, name };
+  }
+
+  listByTeacher(teacherId: string): Class[] {
+    const rows = this.db.prepare("SELECT * FROM classes WHERE teacher_id = ? ORDER BY name").all(teacherId) as ClassRow[];
+    return rows.map(toClass);
+  }
+
+  byId(id: string): Class | undefined {
+    const r = this.db.prepare("SELECT * FROM classes WHERE id = ?").get(id) as ClassRow | undefined;
+    return r && toClass(r);
+  }
+
+  classOf(studentId: string): string | null {
+    const r = this.db.prepare("SELECT class_id FROM class_members WHERE student_id = ?").get(studentId) as
+      | { class_id: string }
+      | undefined;
+    return r?.class_id ?? null;
+  }
+
+  /** Put a student in exactly one class, or remove them from any class when classId is null. */
+  assign(studentId: string, classId: string | null): void {
+    this.db.prepare("DELETE FROM class_members WHERE student_id = ?").run(studentId);
+    if (classId !== null) this.db.prepare("INSERT INTO class_members (class_id, student_id) VALUES (?, ?)").run(classId, studentId);
   }
 }

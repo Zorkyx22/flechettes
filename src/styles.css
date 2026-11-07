@@ -240,3 +240,20 @@ dialog.ask .row { display: flex; gap: .6rem; justify-content: flex-end; flex-wra
 .sync-status { font-size: .85rem; color: #5b6078; }
 .sync-status[data-status="saving"] { color: var(--blue); }
 .sync-status[data-status="offline"] { color: var(--margin); font-weight: 700; }
+
+/* --- Account management --- */
+.screen.manage .manage-body { display: flex; flex-direction: column; gap: 1.2rem; }
+.manage-section { display: flex; flex-direction: column; gap: .6rem; }
+.manage-section h2 { margin: .2rem 0; }
+.create-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .5rem; }
+.create-form label { display: flex; flex-direction: column; font-weight: 700; gap: .2rem; font-size: .9rem; }
+.create-form input, .create-form select, .class-select {
+  font: inherit; padding: .45rem .6rem; border: 2px solid var(--line); border-radius: var(--radius);
+  background: #fff; color: var(--ink);
+}
+.create-form input:focus-visible, .class-select:focus-visible { outline: 3px solid var(--blue); outline-offset: 1px; }
+.row-who { display: flex; align-items: center; gap: .5rem; flex: 1; min-width: 8rem; }
+.row-actions { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.badge-off { color: var(--margin); font-weight: 700; }
+.prompt { display: flex; flex-direction: column; gap: .5rem; }
+.prompt-input { font: inherit; padding: .5rem .7rem; border: 2px solid var(--line); border-radius: var(--radius); }

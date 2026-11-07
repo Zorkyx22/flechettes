@@ -12,6 +12,9 @@ export type PublicUser = {
   createdBy?: string | null;
 };
 
+export type ManagedUser = PublicUser & { classId?: string | null };
+export type Class = { id: string; teacherId: string; name: string };
+
 export type SessionInfo = { needsSetup: boolean; user: PublicUser | null };
 
 export class ApiError extends Error {
@@ -54,6 +57,29 @@ export const api = {
   logout: () => request<{ ok: true }>("/api/auth/logout", "POST"),
   changePassword: (current: string, next: string) =>
     request<{ ok: true }>("/api/account/password", "POST", { current, next }),
+
+  // Admin manages teacher accounts.
+  adminTeachers: () => request<{ users: ManagedUser[] }>("/api/admin/teachers", "GET").then((r) => r.users),
+  adminCreateTeacher: (username: string, password: string) =>
+    request<{ user: PublicUser }>("/api/admin/teachers", "POST", { username, password }).then((r) => r.user),
+  adminSetTeacherDisabled: (id: string, disabled: boolean) =>
+    request<{ ok: true }>(`/api/admin/teachers/${id}/disable`, "POST", { disabled }),
+  adminSetTeacherPassword: (id: string, password: string) =>
+    request<{ ok: true }>(`/api/admin/teachers/${id}/password`, "POST", { password }),
+
+  // Teacher manages their own students and classes.
+  teacherStudents: () => request<{ users: ManagedUser[] }>("/api/teacher/students", "GET").then((r) => r.users),
+  teacherCreateStudent: (username: string, password: string, classId: string | null) =>
+    request<{ user: PublicUser }>("/api/teacher/students", "POST", { username, password, classId }).then((r) => r.user),
+  teacherSetStudentDisabled: (id: string, disabled: boolean) =>
+    request<{ ok: true }>(`/api/teacher/students/${id}/disable`, "POST", { disabled }),
+  teacherSetStudentPassword: (id: string, password: string) =>
+    request<{ ok: true }>(`/api/teacher/students/${id}/password`, "POST", { password }),
+  teacherSetStudentClass: (id: string, classId: string | null) =>
+    request<{ ok: true }>(`/api/teacher/students/${id}/class`, "POST", { classId }),
+  teacherClasses: () => request<{ classes: Class[] }>("/api/teacher/classes", "GET").then((r) => r.classes),
+  teacherCreateClass: (name: string) =>
+    request<{ class: Class }>("/api/teacher/classes", "POST", { name }).then((r) => r.class),
 };
 
 export { request as apiRequest };

@@ -13,6 +13,8 @@ export type User = {
   updatedAt: number;
 };
 
+export type Class = { id: string; teacherId: string; name: string };
+
 /** A user as sent to the browser: never includes the password hash. */
 export type PublicUser = Pick<User, "id" | "username" | "role" | "disabled" | "createdAt" | "updatedAt"> & {
   createdBy?: string | null;

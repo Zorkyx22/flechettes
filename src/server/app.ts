@@ -15,16 +15,29 @@ import {
   setSessionCookie,
   COOKIE,
 } from "./http";
-import { OwnershipError, Sessions, Texts, Users } from "./repo";
+import { Classes, OwnershipError, Sessions, Texts, Users } from "./repo";
 import { toPublicUser, type Role, type User } from "./types";
 
-export type Services = { users: Users; sessions: Sessions; texts: Texts; config: Config };
+export type Services = {
+  users: Users;
+  sessions: Sessions;
+  texts: Texts;
+  classes: Classes;
+  config: Config;
+};
 
 export function createServices(db: DB, config: Config, now: () => number = Date.now): Services {
-  return { users: new Users(db, now), sessions: new Sessions(db, config.idleMs, now), texts: new Texts(db), config };
+  return {
+    users: new Users(db, now),
+    sessions: new Sessions(db, config.idleMs, now),
+    texts: new Texts(db),
+    classes: new Classes(db, now),
+    config,
+  };
 }
 
 const TEXT_PATH = /^\/api\/texts\/([A-Za-z0-9_-]{1,64})$/;
+const MGMT_PATH = /^\/api\/(admin|teacher)\/(teachers|students|classes)(?:\/([0-9a-f]{1,64})\/(disable|password|class))?$/;
 
 type Ctx = {
   req: IncomingMessage;
@@ -66,6 +79,8 @@ async function route(ctx: Ctx): Promise<void> {
   if (path === "/api/texts" && method === "GET") return listTexts(ctx);
   const textMatch = TEXT_PATH.exec(path);
   if (textMatch) return textRoute(ctx, textMatch[1]!);
+  const mgmt = MGMT_PATH.exec(path);
+  if (mgmt) return mgmtRoute(ctx, mgmt[1] as "admin" | "teacher", mgmt[2]!, mgmt[3], mgmt[4]);
   throw new HttpError(404, "not_found");
 }
 
@@ -152,6 +167,112 @@ async function textRoute(ctx: Ctx, id: string): Promise<void> {
   throw new HttpError(405, "method_not_allowed");
 }
 
+// --- account management (admin manages teachers; teacher manages own students + classes) ---
+
+async function mgmtRoute(
+  ctx: Ctx,
+  scope: "admin" | "teacher",
+  kind: string,
+  targetId: string | undefined,
+  action: string | undefined,
+): Promise<void> {
+  if (scope === "admin") {
+    const admin = requireRole(ctx, "admin");
+    if (kind !== "teachers") throw new HttpError(404, "not_found");
+    return manageAccounts(ctx, { role: "teacher", creator: admin, scopeToCreator: false, targetId, action });
+  }
+  const teacher = requireRole(ctx, "teacher");
+  if (kind === "students") {
+    return manageAccounts(ctx, { role: "student", creator: teacher, scopeToCreator: true, targetId, action });
+  }
+  if (kind === "classes") return manageClasses(ctx, teacher);
+  throw new HttpError(404, "not_found");
+}
+
+async function manageAccounts(
+  ctx: Ctx,
+  o: { role: Role; creator: User; scopeToCreator: boolean; targetId?: string; action?: string },
+): Promise<void> {
+  // Resolve + authorize the target for per-user actions: right role, and (for students) owned by us.
+  const target = o.targetId ? ctx.svc.users.byId(o.targetId) : undefined;
+  if (o.targetId) {
+    if (!target || target.role !== o.role || (o.scopeToCreator && target.createdBy !== o.creator.id))
+      throw new HttpError(404, "not_found");
+  }
+
+  if (!o.targetId && ctx.method === "GET") {
+    const users = ctx.svc.users.listByRole(o.role, o.scopeToCreator ? o.creator.id : null);
+    const withClass = o.role === "student";
+    return sendJson(ctx.res, 200, {
+      users: users.map((u) => ({ ...toPublicUser(u), classId: withClass ? ctx.svc.classes.classOf(u.id) : undefined })),
+    });
+  }
+
+  if (!o.targetId && ctx.method === "POST") {
+    const body = await readJson(ctx.req);
+    const { username, password } = credsFrom(body);
+    const created = createAccount(ctx, { username, password, role: o.role, createdBy: o.creator.id });
+    if (o.role === "student") assignClass(ctx, o.creator, created.id, body, { optional: true });
+    return sendJson(ctx.res, 200, { user: toPublicUser(created) });
+  }
+
+  if (target && ctx.method === "POST" && o.action === "disable") {
+    const disabled = boolField(await readJson(ctx.req), "disabled");
+    ctx.svc.users.setDisabled(target.id, disabled);
+    if (disabled) ctx.svc.sessions.destroyAllForUser(target.id); // kick an account that was just turned off
+    return sendJson(ctx.res, 200, { ok: true });
+  }
+  if (target && ctx.method === "POST" && o.action === "password") {
+    const password = passwordField(await readJson(ctx.req), "password");
+    ctx.svc.users.setPassword(target.id, password);
+    ctx.svc.sessions.destroyAllForUser(target.id); // force re-login with the new password
+    return sendJson(ctx.res, 200, { ok: true });
+  }
+  if (target && ctx.method === "POST" && o.action === "class" && o.role === "student") {
+    assignClass(ctx, o.creator, target.id, await readJson(ctx.req), { optional: false });
+    return sendJson(ctx.res, 200, { ok: true });
+  }
+  throw new HttpError(404, "not_found");
+}
+
+async function manageClasses(ctx: Ctx, teacher: User): Promise<void> {
+  if (ctx.method === "GET") return sendJson(ctx.res, 200, { classes: ctx.svc.classes.listByTeacher(teacher.id) });
+  if (ctx.method === "POST") {
+    const name = strField(await readJson(ctx.req), "name", 1, 64).trim();
+    if (name === "") throw new HttpError(400, "bad_field");
+    return sendJson(ctx.res, 200, { class: ctx.svc.classes.create(teacher.id, name) });
+  }
+  throw new HttpError(404, "not_found");
+}
+
+function assignClass(ctx: Ctx, teacher: User, studentId: string, body: unknown, opts: { optional: boolean }): void {
+  const raw = (body as Record<string, unknown> | undefined)?.classId;
+  if (raw === undefined || raw === null) {
+    if (opts.optional) return; // creating a student without a class is fine
+    ctx.svc.classes.assign(studentId, null);
+    return;
+  }
+  if (typeof raw !== "string") throw new HttpError(400, "bad_field");
+  const klass = ctx.svc.classes.byId(raw);
+  if (!klass || klass.teacherId !== teacher.id) throw new HttpError(404, "not_found"); // only your own class
+  ctx.svc.classes.assign(studentId, klass.id);
+}
+
+function createAccount(ctx: Ctx, input: { username: string; password: string; role: Role; createdBy: string }): User {
+  try {
+    return ctx.svc.users.create(input);
+  } catch (err) {
+    if (err instanceof Error && /UNIQUE/i.test(err.message)) throw new HttpError(409, "username_taken");
+    throw err;
+  }
+}
+
+function boolField(body: unknown, key: string): boolean {
+  const v = (body as Record<string, unknown> | undefined)?.[key];
+  if (typeof v !== "boolean") throw new HttpError(400, "bad_field");
+  return v;
+}
+
 // --- shared helpers (used by later stages too) ---
 
 export function currentUser(ctx: Ctx): User | undefined {
@@ -181,7 +302,10 @@ function startSession(ctx: Ctx, userId: string): void {
 }
 
 async function credentials(ctx: Ctx): Promise<{ username: string; password: string }> {
-  const body = await readJson(ctx.req);
+  return credsFrom(await readJson(ctx.req));
+}
+
+function credsFrom(body: unknown): { username: string; password: string } {
   return { username: usernameField(body), password: passwordField(body, "password") };
 }
 

@@ -42,7 +42,12 @@ function showAuth(mode: "setup" | "login"): void {
 async function enterApp(user: PublicUser): Promise<void> {
   const indicator = createSavingIndicator();
   document.body.insertBefore(
-    createAccountBar({ user, extra: [indicator.node], onLogout: () => void logout() }),
+    createAccountBar({
+      user,
+      extra: [indicator.node],
+      onManage: user.role === "student" ? undefined : () => (location.hash = "#/gestion"),
+      onLogout: () => void logout(),
+    }),
     document.body.firstChild,
   );
   startIdleTimer(IDLE_MS, () => void logout(S.idleLoggedOut));
@@ -57,7 +62,7 @@ async function enterApp(user: PublicUser): Promise<void> {
   const library = new Library(cached);
   await library.init();
   await maybeOfferImport(library);
-  startApp(root, library);
+  startApp(root, library, user);
 }
 
 /** One-time offer to pull texts from the old local-only database into this account. */
