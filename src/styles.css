@@ -215,3 +215,45 @@ dialog.ask .row { display: flex; gap: .6rem; justify-content: flex-end; flex-wra
 .swatch[aria-pressed="true"] { border-color: var(--ink); box-shadow: 0 0 0 2px var(--ink); }
 .swatch .arrow { stroke-width: 4; }
 .swatch:focus-visible { outline: 4px solid #ffb703; outline-offset: 2px; }
+
+/* --- Authentication --- */
+.account-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: .6rem;
+  padding: .4rem 1rem; background: var(--blue-soft); border-bottom: 1px solid var(--line);
+}
+.account-who small { color: #5b6078; }
+.account-actions { display: flex; gap: .4rem; align-items: center; }
+
+.screen.auth { max-width: 26rem; padding-top: 3rem; }
+.auth-form { display: flex; flex-direction: column; gap: .5rem; }
+.auth-form h1 { margin: 0 0 .5rem; }
+.auth-form label { font-weight: 700; margin-top: .4rem; }
+.auth-form input {
+  font: inherit; padding: .55rem .7rem; border: 2px solid var(--line);
+  border-radius: var(--radius); background: #fff; color: var(--ink);
+}
+.auth-form input:focus-visible { outline: 3px solid var(--blue); outline-offset: 1px; }
+.auth-form .btn { margin-top: .8rem; }
+.auth-error { color: var(--red); font-weight: 700; margin: .3rem 0 0; }
+.auth-notice { color: var(--blue); margin: .2rem 0; }
+
+.sync-status { font-size: .85rem; color: #5b6078; }
+.sync-status[data-status="saving"] { color: var(--blue); }
+.sync-status[data-status="offline"] { color: var(--margin); font-weight: 700; }
+
+/* --- Account management --- */
+.screen.manage .manage-body { display: flex; flex-direction: column; gap: 1.2rem; }
+.manage-section { display: flex; flex-direction: column; gap: .6rem; }
+.manage-section h2 { margin: .2rem 0; }
+.create-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .5rem; }
+.create-form label { display: flex; flex-direction: column; font-weight: 700; gap: .2rem; font-size: .9rem; }
+.create-form input, .create-form select, .class-select {
+  font: inherit; padding: .45rem .6rem; border: 2px solid var(--line); border-radius: var(--radius);
+  background: #fff; color: var(--ink);
+}
+.create-form input:focus-visible, .class-select:focus-visible { outline: 3px solid var(--blue); outline-offset: 1px; }
+.row-who { display: flex; align-items: center; gap: .5rem; flex: 1; min-width: 8rem; }
+.row-actions { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.badge-off { color: var(--margin); font-weight: 700; }
+.prompt { display: flex; flex-direction: column; gap: .5rem; }
+.prompt-input { font: inherit; padding: .5rem .7rem; border: 2px solid var(--line); border-radius: var(--radius); }

@@ -35,3 +35,44 @@ export function confirmDialog(opts: { title: string; help?: string; yes: string;
     dialog.showModal();
   });
 }
+
+/** A single-field modal prompt. Resolves the entered value, or null if cancelled. */
+export function promptDialog(opts: {
+  title: string;
+  label: string;
+  type?: string;
+  ok: string;
+  cancel: string;
+}): Promise<string | null> {
+  return new Promise((resolve) => {
+    const dialog = el("dialog", { class: "ask" });
+    const input = el("input", { type: opts.type ?? "text", class: "prompt-input" });
+    const finish = (answer: string | null) => {
+      dialog.close();
+      dialog.remove();
+      resolve(answer);
+    };
+    const form = el(
+      "form",
+      { class: "prompt" },
+      el("h2", { text: opts.title }),
+      el("label", { text: opts.label }),
+      input,
+      el(
+        "div",
+        { class: "row" },
+        el("button", { class: "btn quiet big", type: "button", text: opts.cancel, onclick: () => finish(null) }),
+        el("button", { class: "btn primary big", type: "submit", text: opts.ok }),
+      ),
+    );
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      finish(input.value);
+    });
+    dialog.append(form);
+    dialog.addEventListener("cancel", () => resolve(null));
+    document.body.append(dialog);
+    dialog.showModal();
+    input.focus();
+  });
+}
