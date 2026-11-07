@@ -89,4 +89,22 @@ export const S = {
   arrowLabel: (from: string, to: string) => `flèche de ${from} vers ${to}`,
   loadFailed: "Ce texte n'a pas pu être ouvert.",
   storageFailed: "Impossible d'enregistrer ici. Fais une sauvegarde de ton texte.",
+
+  // Authentication
+  loginTitle: "Connexion",
+  loginUser: "Identifiant",
+  loginPassword: "Mot de passe",
+  loginButton: "Se connecter",
+  loginFailed: "Identifiant ou mot de passe incorrect.",
+  logout: "Se déconnecter",
+  setupTitle: "Première configuration",
+  setupHelp: "Crée le compte administrateur du serveur. C'est la seule fois où cette page apparaît.",
+  setupButton: "Créer l'administrateur",
+  setupDone: "Administrateur créé. Bienvenue !",
+  passwordTooShort: "Le mot de passe doit avoir au moins 4 caractères.",
+  usernameNeeded: "Choisis un identifiant.",
+  idleLoggedOut: "Tu as été déconnecté après une période sans activité.",
+  sessionExpired: "Ta session a expiré. Reconnecte-toi.",
+  networkError: "Le serveur est injoignable. Réessaie.",
+  roleName: { admin: "administrateur", teacher: "enseignant", student: "élève" } as Record<string, string>,
 };
