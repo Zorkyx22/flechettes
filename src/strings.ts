@@ -107,4 +107,15 @@ export const S = {
   sessionExpired: "Ta session a expiré. Reconnecte-toi.",
   networkError: "Le serveur est injoignable. Réessaie.",
   roleName: { admin: "administrateur", teacher: "enseignant", student: "élève" } as Record<string, string>,
+  syncSaving: "Enregistrement…",
+  syncSaved: "Enregistré",
+  syncOffline: "Hors ligne — sauvegarde dès le retour du serveur",
+  logoutWaitSync: "On termine d'enregistrer ton travail… reste connecté un instant.",
+  importOfferTitle: "Retrouver tes anciens textes ?",
+  importOfferHelp: (n: number) =>
+    n === 1
+      ? "1 texte se trouve sur cet ordinateur. L'ajouter à ton compte ?"
+      : `${n} textes se trouvent sur cet ordinateur. Les ajouter à ton compte ?`,
+  importOfferYes: "Oui, les ajouter",
+  importOfferNo: "Non merci",
 };

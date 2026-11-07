@@ -236,3 +236,7 @@ dialog.ask .row { display: flex; gap: .6rem; justify-content: flex-end; flex-wra
 .auth-form .btn { margin-top: .8rem; }
 .auth-error { color: var(--red); font-weight: 700; margin: .3rem 0 0; }
 .auth-notice { color: var(--blue); margin: .2rem 0; }
+
+.sync-status { font-size: .85rem; color: #5b6078; }
+.sync-status[data-status="saving"] { color: var(--blue); }
+.sync-status[data-status="offline"] { color: var(--margin); font-weight: 700; }
