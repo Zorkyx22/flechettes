@@ -1,0 +1,217 @@
+:root {
+  --bg: #fff8ec;
+  --ink: #2b2d42;
+  --blue: #2f6fdd;
+  --blue-soft: #dce8ff;
+  --red: #d94b4b;
+  --line: #b9cdea;
+  --line-faint: #dbe5f5;
+  --margin: #e03a4a;
+  --radius: 16px;
+  --scale: 1;
+  font-family: "Andika", system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; font-size: 1.1rem; }
+[hidden] { display: none !important; }
+
+.screen { max-width: 62rem; margin: 0 auto; padding: 1rem; }
+.bar { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; margin-bottom: .8rem; }
+h1 { margin: 0; font-size: 2rem; }
+
+/* Buttons: large touch targets, one clear primary action per screen. */
+.btn, .seg {
+  font: inherit; min-height: 48px; min-width: 48px; padding: .4rem 1rem;
+  border: 2px solid var(--blue); border-radius: var(--radius);
+  background: #fff; color: var(--blue); cursor: pointer;
+}
+.btn:hover, .seg:hover { background: var(--blue-soft); }
+.btn:disabled { opacity: .35; cursor: default; }
+.btn.primary { background: var(--blue); color: #fff; }
+.btn.quiet { border-color: transparent; background: transparent; }
+.btn.quiet:hover { background: var(--blue-soft); }
+.btn.danger { border-color: var(--red); background: var(--red); color: #fff; }
+.btn.big { font-size: 1.3rem; padding: .6rem 1.4rem; }
+.btn.icon { font-size: 1.4rem; padding: .2rem .7rem; }
+.btn:focus-visible, .seg:focus-visible, .pick:focus-visible, .card-main:focus-visible, .title:focus-visible {
+  outline: 4px solid #ffb703; outline-offset: 2px;
+}
+.seg-group { display: inline-flex; }
+.seg { border-radius: 0; }
+.seg:first-child { border-radius: var(--radius) 0 0 var(--radius); }
+.seg:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
+.seg + .seg { border-left-width: 0; }
+.seg[aria-pressed="true"] { background: var(--blue); color: #fff; }
+
+/* Library */
+.actions { margin: 1rem 0; }
+.cards { list-style: none; padding: 0; margin: 0; display: grid; gap: .7rem; }
+.card { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; background: #fff; border-radius: var(--radius); padding: .4rem; box-shadow: 0 2px 0 var(--line); }
+.card-main { flex: 1 1 14rem; display: grid; gap: .2rem; text-align: left; font: inherit; color: inherit; background: none; border: 0; padding: .6rem .8rem; cursor: pointer; border-radius: var(--radius); }
+.card-main.static { cursor: default; }
+.card-main strong { font-size: 1.3rem; }
+.card-main small { color: #5b6078; }
+.empty { padding: 1.2rem; color: #5b6078; }
+.tools { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: 1.4rem; }
+.help { color: #5b6078; }
+
+/* Editor chrome */
+.editor .bar { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: .4rem 0; }
+.panel { display: grid; gap: .6rem; padding: 1rem; margin-bottom: .8rem; background: #fff; border-radius: var(--radius); box-shadow: 0 2px 0 var(--line); }
+.choice { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem; }
+.choice > span { min-width: 5rem; font-weight: 700; }
+.hint { margin: 0 0 .6rem; color: #5b6078; }
+
+/* The sheet: a grand cahier (24×32, portrait) sized by the available width. Everything inside is in
+   container-width units, so it looks and wraps the same at any screen width. Row height drives both the
+   ruling and the line height. The sheet clips the text flow; turning a page slides the flow sideways. */
+.sheet {
+  --page: 0; --row: calc(var(--fs) * 1.5); --pitch: calc(var(--row) * 2); --band: 12.5cqw; --ruled-top: var(--band); --fs: calc(2.22cqw * var(--scale));
+  position: relative; overflow: clip; aspect-ratio: 3 / 4; background-color: #fff;
+  border-radius: var(--radius); box-shadow: 0 2px 0 var(--line);
+}
+.sheet[data-size="l"] { --scale: 1.29; }
+.sheet[data-size="xl"] { --scale: 1.64; }
+.sheet:focus-within { box-shadow: 0 0 0 4px #ffb703; }
+:root[data-paper="lined"] .sheet {
+  /* The red margin, full height. */
+  background-image: linear-gradient(to right, transparent 0, transparent 11.5cqw, var(--margin) 11.5cqw, var(--margin) 12.3cqw, transparent 12.3cqw);
+}
+/* Ordinary lined paper: one light line under every line of writing, starting where the text starts. */
+:root[data-paper="lined"] .sheet::before {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; top: var(--ruled-top); pointer-events: none;
+  background-image: repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--pitch) - 1.5px), var(--line) calc(var(--pitch) - 1.5px), var(--line) var(--pitch));
+  /* Shift so the line sits just under the baseline of each text line. */
+  background-position: 0 calc(var(--fs) * -0.85);
+}
+.paper { display: contents; }
+.surface {
+  box-sizing: border-box; width: 100%; height: calc(100cqw * 4 / 3); padding: var(--band) 6cqw var(--row) 14cqw; outline: none;
+  column-width: calc(100cqw - 20cqw); column-gap: 20cqw; column-fill: auto;
+  transform: translateX(calc(var(--page, 0) * -100cqw));
+  font-size: var(--fs); line-height: calc(var(--row) * 2); white-space: pre-wrap; overflow-wrap: anywhere;
+  position: relative;
+}
+.pager { display: flex; align-items: center; justify-content: center; gap: .8rem; margin-top: .6rem; }
+.page-label { min-width: 7rem; text-align: center; font-weight: 700; }
+
+/* The title zone: an unruled band at the top of every sheet. Only the first sheet shows the title, centred. */
+.title-band { position: absolute; left: 14cqw; width: 80cqw; top: 0; height: var(--band); display: grid; align-content: center; z-index: 1; }
+.sheet:not([data-first="1"]) .title-band { visibility: hidden; }
+.title-host {
+  font-size: calc(var(--fs) * 1.25); font-weight: 700; line-height: 1.35; text-align: center;
+  white-space: pre-wrap; overflow-wrap: anywhere; outline: none; max-height: var(--band); overflow: hidden; min-height: 1.35em;
+}
+.title-host.is-empty::before { content: attr(data-hint); color: #9aa0b5; font-style: italic; font-weight: 400; pointer-events: none; }
+
+/* A corrected word as on paper: new word written above the crossed-out original. */
+ruby.corr { ruby-position: over; ruby-align: center; margin-inline: .2em; }
+ruby.corr s { color: var(--red); text-decoration-thickness: 2px; }
+ruby.corr rt { color: var(--blue); font-size: .85em; line-height: 1; font-weight: 700; }
+
+.surface.correcting { user-select: none; -webkit-user-select: none; }
+.pick { cursor: pointer; border-radius: 6px; }
+.pick:hover { background: var(--blue-soft); }
+.word-input {
+  position: absolute; z-index: 3; font: inherit; line-height: 1; padding: 0 .3rem;
+  border: 3px solid var(--blue); border-radius: 10px; background: #fff; color: inherit;
+}
+
+/* Messages */
+.toast { position: fixed; left: 50%; bottom: 1.5rem; transform: translateX(-50%); max-width: 90vw; padding: .9rem 1.4rem; background: var(--ink); color: #fff; border-radius: var(--radius); z-index: 10; }
+dialog.ask { border: 0; border-radius: var(--radius); padding: 1.6rem; max-width: 26rem; font-family: inherit; }
+dialog.ask::backdrop { background: rgb(43 45 66 / .5); }
+dialog.ask .row { display: flex; gap: .6rem; justify-content: flex-end; flex-wrap: wrap; margin-top: 1.2rem; }
+.fatal { padding: 2rem; font-size: 1.3rem; }
+
+/* Page wrapper: the arrow layer sits over the text. */
+/* The sheet: a grand cahier (24×32, portrait). Everything inside is sized in container-width units,
+   so the sheet looks and wraps the same at any screen width. */
+.page { position: relative; container-type: inline-size; width: min(100%, 72rem); margin: 0 auto; }
+.arrows { position: absolute; z-index: 2; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; opacity: .38; }
+.arrows-live .arrows { opacity: 1; }
+.arrow { fill: none; stroke-width: 3; stroke-linecap: round; pointer-events: none; }
+.arrow-g.selected .arrow { stroke-width: 5; filter: drop-shadow(0 0 3px #ffb703); }
+.arrow-hit { fill: none; stroke: transparent; stroke-width: 22; pointer-events: none; }
+.arrows-live .arrow-hit { pointer-events: stroke; cursor: pointer; }
+.arrow-g:focus-visible { outline: none; }
+.arrow-g:focus-visible .arrow { stroke-width: 5; filter: drop-shadow(0 0 3px #ffb703); }
+.arrow-blue { stroke: var(--c-blue); } .arrow-red { stroke: var(--c-red); } .arrow-green { stroke: var(--c-green); }
+.arrow-orange { stroke: var(--c-orange); } .arrow-purple { stroke: var(--c-purple); }
+.mk-blue { fill: var(--c-blue); } .mk-red { fill: var(--c-red); } .mk-green { fill: var(--c-green); }
+.mk-orange { fill: var(--c-orange); } .mk-purple { fill: var(--c-purple); }
+:root { --c-blue: #2f6fdd; --c-red: #d94b4b; --c-green: #2e9e5b; --c-orange: #e8871e; --c-purple: #8d4fd8; }
+.erase { position: absolute; z-index: 4; transform: translate(-50%, -50%); background: var(--red); border-color: var(--red); color: #fff; }
+.erase:hover { background: #b93a3a; }
+
+.pick.armed { background: #ffe9a8; outline: 3px solid #ffb703; }
+
+/* Tags: what the child says a word is. Fixed colors per class; the class text is always shown too. */
+:root {
+  --tc-nom: #2f6fdd; --tc-verbe: #d94b4b; --tc-adjectif: #2e9e5b; --tc-determinant: #d9780f; --tc-pronom: #8d4fd8;
+  --tc-adverbe: #0e8fa0; --tc-preposition: #8a6d3b; --tc-conjonction: #cc3d96; --tc-nom_propre: #25306b; --tc-interjection: #5b6078;
+}
+.tags { position: absolute; z-index: 2; inset: 0; pointer-events: none; opacity: .45; }
+.arrows-live .tags { opacity: 1; }
+.tag {
+  --tc: #5b6078; position: absolute; display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+  height: calc(var(--fs) * 0.9); padding: 0 .4em; font-size: calc(var(--fs) * 0.6); font-weight: 700; line-height: 1; white-space: nowrap;
+  color: var(--tc); background: #fff; border: 1.5px solid var(--tc); border-radius: 999px; transform-origin: 50% 100%;
+}
+/* With gender and number: a second, smaller line in the same bubble. */
+.tag.two { height: calc(var(--fs) * 1.5); border-radius: calc(var(--fs) * 0.5); }
+.tag-gn { font-size: .78em; line-height: 1; margin-top: .12em; }
+.arrows-live[data-tool="identify"] .tag { pointer-events: auto; cursor: pointer; }
+.cls-nom { --tc: var(--tc-nom); } .cls-verbe { --tc: var(--tc-verbe); } .cls-adjectif { --tc: var(--tc-adjectif); }
+.cls-determinant { --tc: var(--tc-determinant); } .cls-pronom { --tc: var(--tc-pronom); } .cls-adverbe { --tc: var(--tc-adverbe); }
+.cls-preposition { --tc: var(--tc-preposition); } .cls-conjonction { --tc: var(--tc-conjonction); }
+.cls-nom_propre { --tc: var(--tc-nom_propre); } .cls-interjection { --tc: var(--tc-interjection); }
+
+/* Picker */
+.picker {
+  position: absolute; z-index: 5; width: min(30rem, 94%); padding: 1rem; display: grid; gap: .7rem;
+  background: #fff; border-radius: var(--radius); box-shadow: 0 6px 24px rgb(43 45 66 / .25); border: 2px solid var(--line);
+  font-size: 1.05rem; line-height: 1.3; white-space: normal;
+}
+.picker-title { margin: 0; font-weight: 700; }
+.picker-classes { display: grid; grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr)); gap: .4rem; }
+.pick-class { color: var(--tc, var(--blue)); border-color: var(--tc, var(--blue)); padding: .3rem .5rem; }
+.pick-class[aria-pressed="true"] { background: var(--tc, var(--blue)); color: #fff; }
+.picker-row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.picker-row > span { min-width: 4.5rem; font-weight: 700; }
+.picker-row .seg { border-radius: var(--radius); border-left-width: 2px; }
+.picker-actions { display: flex; flex-wrap: wrap; gap: .4rem; justify-content: flex-end; }
+
+/* Left rail: one vertical bar, stable in both modes; tools only appear in correction mode. */
+.screen.editor { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 1rem; max-width: 84rem; align-items: start; }
+.rail { position: sticky; top: .5rem; height: calc(100vh - 1rem); width: 6.6rem; display: flex; flex-direction: column; gap: .6rem; overflow-y: auto; }
+.rail-group, .rail-tools { display: grid; gap: .4rem; }
+.rail-bottom { margin-top: auto; display: grid; gap: .4rem; }
+.rail-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .15rem; width: 100%;
+  min-height: 56px; padding: .35rem .2rem; font: inherit; font-size: .85rem; line-height: 1.1; text-align: center;
+  color: var(--blue); background: #fff; border: 2px solid var(--blue); border-radius: var(--radius); cursor: pointer;
+}
+.rail-btn:hover { background: var(--blue-soft); }
+.rail-btn[aria-pressed="true"] { background: var(--blue); color: #fff; }
+.rail-btn:disabled { opacity: .35; cursor: default; }
+.rail-btn:focus-visible { outline: 4px solid #ffb703; outline-offset: 2px; }
+.icon { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.palette { display: grid; gap: .3rem; }
+.swatch { min-width: 0; width: 100%; padding: .2rem; display: flex; justify-content: center; align-items: center; }
+.swatch svg { max-width: 100%; }
+.stage { min-width: 0; }
+.hint { min-height: 1.4em; }
+.panel { position: fixed; left: 7.8rem; bottom: 1rem; z-index: 6; box-shadow: 0 6px 24px rgb(43 45 66 / .25); }
+@media (max-width: 720px) {
+  .rail { width: 3.8rem; }
+  .rail-label { display: none; }
+  .panel { left: 4.8rem; }
+}
+.swatch { min-height: 40px; background: #fff; border: 2px solid var(--line); border-radius: 12px; cursor: pointer; }
+.swatch[aria-pressed="true"] { border-color: var(--ink); box-shadow: 0 0 0 2px var(--ink); }
+.swatch .arrow { stroke-width: 4; }
+.swatch:focus-visible { outline: 4px solid #ffb703; outline-offset: 2px; }
