@@ -1,4 +1,6 @@
 import { randomBytes } from "node:crypto";
+import type { Doc, TextSize } from "../model/types";
+import type { Meta } from "../storage/store";
 import { hashPassword, newSessionId } from "./auth";
 import type { DB } from "./db";
 import type { Role, User } from "./types";
@@ -130,5 +132,84 @@ export class Sessions {
   /** Housekeeping: drop sessions idle past the timeout. */
   sweep(): void {
     this.db.prepare("DELETE FROM sessions WHERE last_seen_at < ?").run(this.now() - this.idleMs);
+  }
+}
+
+type TextRow = {
+  id: string;
+  owner_id: string;
+  title: string;
+  created_at: number;
+  updated_at: number;
+  deleted_at: number | null;
+  text_size: string;
+  tokens: string;
+  overlay: string;
+};
+
+function toDoc(r: TextRow): Doc {
+  return {
+    id: r.id,
+    title: r.title,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    deletedAt: r.deleted_at,
+    textSize: r.text_size as TextSize,
+    tokens: JSON.parse(r.tokens),
+    overlay: JSON.parse(r.overlay),
+  };
+}
+
+export class OwnershipError extends Error {}
+
+/** Per-user text storage. Every method is scoped to an owner id; a text never crosses owners. */
+export class Texts {
+  constructor(private readonly db: DB) {}
+
+  listMeta(ownerId: string): Meta[] {
+    const rows = this.db
+      .prepare("SELECT id, title, created_at, updated_at, deleted_at FROM texts WHERE owner_id = ?")
+      .all(ownerId) as Pick<TextRow, "id" | "title" | "created_at" | "updated_at" | "deleted_at">[];
+    return rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+      deletedAt: r.deleted_at,
+    }));
+  }
+
+  get(ownerId: string, id: string): Doc | undefined {
+    const r = this.db.prepare("SELECT * FROM texts WHERE id = ? AND owner_id = ?").get(id, ownerId) as TextRow | undefined;
+    return r && toDoc(r);
+  }
+
+  /** Upsert the owner's text. Refuses to touch an id that already belongs to someone else. */
+  put(ownerId: string, doc: Doc): void {
+    const existing = this.db.prepare("SELECT owner_id FROM texts WHERE id = ?").get(doc.id) as { owner_id: string } | undefined;
+    if (existing && existing.owner_id !== ownerId) throw new OwnershipError("not your text");
+    this.db
+      .prepare(
+        `INSERT INTO texts (id, owner_id, title, created_at, updated_at, deleted_at, text_size, tokens, overlay)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           title = excluded.title, updated_at = excluded.updated_at, deleted_at = excluded.deleted_at,
+           text_size = excluded.text_size, tokens = excluded.tokens, overlay = excluded.overlay`,
+      )
+      .run(
+        doc.id,
+        ownerId,
+        doc.title,
+        doc.createdAt,
+        doc.updatedAt,
+        doc.deletedAt,
+        doc.textSize,
+        JSON.stringify(doc.tokens),
+        JSON.stringify(doc.overlay),
+      );
+  }
+
+  remove(ownerId: string, id: string): void {
+    this.db.prepare("DELETE FROM texts WHERE id = ? AND owner_id = ?").run(id, ownerId);
   }
 }

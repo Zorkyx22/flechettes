@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { ImportError, parseStoredDoc } from "../storage/exchange";
 import type { Config } from "./config";
 import type { DB } from "./db";
 import { verifyPassword } from "./auth";
@@ -14,14 +15,16 @@ import {
   setSessionCookie,
   COOKIE,
 } from "./http";
-import { Sessions, Users } from "./repo";
+import { OwnershipError, Sessions, Texts, Users } from "./repo";
 import { toPublicUser, type Role, type User } from "./types";
 
-export type Services = { users: Users; sessions: Sessions; config: Config };
+export type Services = { users: Users; sessions: Sessions; texts: Texts; config: Config };
 
 export function createServices(db: DB, config: Config, now: () => number = Date.now): Services {
-  return { users: new Users(db, now), sessions: new Sessions(db, config.idleMs, now), config };
+  return { users: new Users(db, now), sessions: new Sessions(db, config.idleMs, now), texts: new Texts(db), config };
 }
+
+const TEXT_PATH = /^\/api\/texts\/([A-Za-z0-9_-]{1,64})$/;
 
 type Ctx = {
   req: IncomingMessage;
@@ -60,6 +63,9 @@ async function route(ctx: Ctx): Promise<void> {
   if (method === "POST" && path === "/api/auth/login") return login(ctx);
   if (method === "POST" && path === "/api/auth/logout") return logout(ctx);
   if (method === "POST" && path === "/api/account/password") return changePassword(ctx);
+  if (path === "/api/texts" && method === "GET") return listTexts(ctx);
+  const textMatch = TEXT_PATH.exec(path);
+  if (textMatch) return textRoute(ctx, textMatch[1]!);
   throw new HttpError(404, "not_found");
 }
 
@@ -106,6 +112,44 @@ async function changePassword(ctx: Ctx): Promise<void> {
   if (!verifyPassword(current, { hash: found.pwHash, salt: found.pwSalt })) throw new HttpError(401, "invalid_credentials");
   ctx.svc.users.setPassword(user.id, next);
   sendJson(ctx.res, 200, { ok: true });
+}
+
+// --- texts routes (the Store interface, scoped to the signed-in owner) ---
+
+function listTexts(ctx: Ctx): void {
+  const user = requireUser(ctx);
+  sendJson(ctx.res, 200, { texts: ctx.svc.texts.listMeta(user.id) });
+}
+
+async function textRoute(ctx: Ctx, id: string): Promise<void> {
+  const user = requireUser(ctx);
+  if (ctx.method === "GET") {
+    const doc = ctx.svc.texts.get(user.id, id);
+    if (!doc) throw new HttpError(404, "not_found");
+    return sendJson(ctx.res, 200, { doc });
+  }
+  if (ctx.method === "PUT") {
+    let doc;
+    try {
+      doc = parseStoredDoc(await readJson(ctx.req));
+    } catch (err) {
+      if (err instanceof ImportError) throw new HttpError(400, "bad_doc");
+      throw err;
+    }
+    if (doc.id !== id) throw new HttpError(400, "id_mismatch");
+    try {
+      ctx.svc.texts.put(user.id, doc);
+    } catch (err) {
+      if (err instanceof OwnershipError) throw new HttpError(403, "forbidden");
+      throw err;
+    }
+    return sendJson(ctx.res, 200, { ok: true });
+  }
+  if (ctx.method === "DELETE") {
+    ctx.svc.texts.remove(user.id, id);
+    return sendJson(ctx.res, 200, { ok: true });
+  }
+  throw new HttpError(405, "method_not_allowed");
 }
 
 // --- shared helpers (used by later stages too) ---

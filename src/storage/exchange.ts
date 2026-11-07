@@ -39,6 +39,14 @@ export function parseExport(raw: string): Doc[] {
   return data.texts.map((t) => parseDoc(t, version));
 }
 
+/**
+ * Validate one untrusted document for server storage: the same strict rebuild as import, but the bin
+ * state (`deletedAt`) is kept because the server tracks it per text. Throws {@link ImportError}.
+ */
+export function parseStoredDoc(v: unknown): Doc {
+  return parseDoc(v, VERSION, true);
+}
+
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -53,12 +61,17 @@ function time(v: unknown, what: string): number {
   return v;
 }
 
+function deletedAt(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  return time(v, "deletedAt");
+}
+
 function id(v: unknown, what: string): string {
   if (typeof v !== "string" || !ID.test(v)) throw new ImportError(`bad ${what}`);
   return v;
 }
 
-function parseDoc(v: unknown, version: number): Doc {
+function parseDoc(v: unknown, version: number, keepDeleted = false): Doc {
   if (!isRecord(v) || !Array.isArray(v.tokens) || !Array.isArray(v.overlay)) throw new ImportError("bad text");
   if (v.tokens.length > LIMITS.tokens || v.overlay.length > LIMITS.overlayItems) throw new ImportError("text too large");
   const tokens = v.tokens.map(parseToken);
@@ -74,7 +87,7 @@ function parseDoc(v: unknown, version: number): Doc {
     id: id(v.id, "id"),
     createdAt: time(v.createdAt, "date"),
     updatedAt: time(v.updatedAt, "date"),
-    deletedAt: null,
+    deletedAt: keepDeleted ? deletedAt(v.deletedAt) : null,
     tokens,
     overlay,
   };
