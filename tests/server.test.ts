@@ -204,6 +204,50 @@ describe("auth HTTP flow", () => {
     expect((await call("/api/texts/t1", { cookie: admin.cookie })).status).toBe(404);
   });
 
+  it("lets only an admin manage teachers", async () => {
+    const admin = await call("/api/setup", { method: "POST", body: { username: "admin", password: "secret1" } });
+    expect((await call("/api/admin/teachers", { method: "POST", cookie: admin.cookie, body: { username: "m", password: "teach1" } })).status).toBe(200);
+    expect((await call("/api/admin/teachers", { cookie: admin.cookie })).data.users.map((u: any) => u.username)).toEqual(["m"]);
+    expect((await call("/api/admin/teachers", { method: "POST", cookie: admin.cookie, body: { username: "m", password: "again1" } })).status).toBe(409);
+    expect((await call("/api/admin/teachers")).status).toBe(401);
+
+    const teacher = await call("/api/auth/login", { method: "POST", body: { username: "m", password: "teach1" } });
+    expect((await call("/api/admin/teachers", { cookie: teacher.cookie })).status).toBe(403); // teacher is not admin
+  });
+
+  it("scopes a teacher to their own students and classes", async () => {
+    await call("/api/setup", { method: "POST", body: { username: "admin", password: "secret1" } });
+    svc.users.create({ username: "a", password: "pw1234", role: "teacher", createdBy: null });
+    svc.users.create({ username: "b", password: "pw1234", role: "teacher", createdBy: null });
+    const a = await call("/api/auth/login", { method: "POST", body: { username: "a", password: "pw1234" } });
+    const b = await call("/api/auth/login", { method: "POST", body: { username: "b", password: "pw1234" } });
+
+    const clsA = (await call("/api/teacher/classes", { method: "POST", cookie: a.cookie, body: { name: "CM1" } })).data.class;
+    expect((await call("/api/teacher/students", { method: "POST", cookie: a.cookie, body: { username: "lea", password: "kid123", classId: clsA.id } })).status).toBe(200);
+
+    const mine = (await call("/api/teacher/students", { cookie: a.cookie })).data.users;
+    expect(mine.map((u: any) => u.username)).toEqual(["lea"]);
+    expect(mine[0].classId).toBe(clsA.id);
+    const sid = mine[0].id;
+
+    // Teacher B sees none of A's students and cannot act on them.
+    expect((await call("/api/teacher/students", { cookie: b.cookie })).data.users).toEqual([]);
+    expect((await call(`/api/teacher/students/${sid}/disable`, { method: "POST", cookie: b.cookie, body: { disabled: true } })).status).toBe(404);
+
+    // A cannot move their student into B's class.
+    const clsB = (await call("/api/teacher/classes", { method: "POST", cookie: b.cookie, body: { name: "CE2" } })).data.class;
+    expect((await call(`/api/teacher/students/${sid}/class`, { method: "POST", cookie: a.cookie, body: { classId: clsB.id } })).status).toBe(404);
+  });
+
+  it("kicks a user whose account is disabled or password-reset", async () => {
+    const admin = await call("/api/setup", { method: "POST", body: { username: "admin", password: "secret1" } });
+    const t = svc.users.create({ username: "m", password: "teach1", role: "teacher", createdBy: null });
+    const teacher = await call("/api/auth/login", { method: "POST", body: { username: "m", password: "teach1" } });
+    expect((await call("/api/auth/session", { cookie: teacher.cookie })).data.user.username).toBe("m");
+    await call(`/api/admin/teachers/${t.id}/disable`, { method: "POST", cookie: admin.cookie, body: { disabled: true } });
+    expect((await call("/api/auth/session", { cookie: teacher.cookie })).data.user).toBeNull();
+  });
+
   it("expires an idle session on the next request", async () => {
     await new Promise<void>((r) => server.close(() => r())); // replace the default-config server
     await start(testConfig({ idleMs: 100 }));
