@@ -2,7 +2,7 @@ import { migrateV1 } from "../model/doc";
 import type { Doc } from "../model/types";
 
 /** What the list screen needs; small, loaded without opening any text. */
-export type Meta = { id: string; title: string; createdAt: number; updatedAt: number; deletedAt: number | null };
+export type Meta = { id: string; title: string; createdAt: number; updatedAt: number; deletedAt: number | null; studentId?: string };
 
 export interface Store {
   listMeta(): Promise<Meta[]>;
@@ -13,7 +13,9 @@ export interface Store {
 }
 
 export function metaOf(doc: Doc): Meta {
-  return { id: doc.id, title: doc.title, createdAt: doc.createdAt, updatedAt: doc.updatedAt, deletedAt: doc.deletedAt };
+  const meta: Meta = { id: doc.id, title: doc.title, createdAt: doc.createdAt, updatedAt: doc.updatedAt, deletedAt: doc.deletedAt };
+  if (doc.studentId !== undefined) meta.studentId = doc.studentId;
+  return meta;
 }
 
 const DB_NAME = "flechettes";

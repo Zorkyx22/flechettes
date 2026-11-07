@@ -79,6 +79,18 @@ export class Library {
     await this.setDeleted(id, null);
   }
 
+  /** Give a text to a student (roster), or clear its owner with `null`. */
+  async assign(id: string, studentId: string | null): Promise<void> {
+    await this.flush();
+    const doc = await this.store.get(id);
+    if (!doc) return;
+    const next: Doc = { ...doc, updatedAt: this.now() };
+    if (studentId === null) delete next.studentId;
+    else next.studentId = studentId;
+    this.meta.set(id, metaOf(next));
+    await this.store.put(next);
+  }
+
   /** Erase a binned text for good. */
   async erase(id: string): Promise<void> {
     await this.flush();

@@ -18,7 +18,13 @@ export const LIMITS = {
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 export function exportDocs(docs: Doc[]): string {
-  return JSON.stringify({ format: FORMAT, version: VERSION, texts: docs.map((d) => ({ ...d, deletedAt: null })) });
+  // Roster ownership is deliberately not part of a backup: it is a local/sync concern, and an
+  // owner id in a portable file would dangle on another device. Drop it, like bin state.
+  return JSON.stringify({
+    format: FORMAT,
+    version: VERSION,
+    texts: docs.map(({ studentId: _drop, ...d }) => ({ ...d, deletedAt: null })),
+  });
 }
 
 export class ImportError extends Error {}

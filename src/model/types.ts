@@ -29,6 +29,8 @@ export type Doc = {
   textSize: TextSize;
   /** Time the text went to the bin, or null. */
   deletedAt: number | null;
+  /** The owning student (roster module), or absent when the text is unassigned. */
+  studentId?: string;
   tokens: Token[];
   overlay: OverlayItem[];
 };
