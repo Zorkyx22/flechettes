@@ -25,8 +25,9 @@ In French schooling, children learn to fix spelling, agreement and conjugation b
 
 ## Target Users
 
-- **Child learner** (French primary/secondary school) writing and correcting texts.
-- **Teacher** (not in the first build) who will want to collect children's texts, overlays and corrections, grouped by class.
+- **Student** (French primary/secondary school) writing and correcting their own texts.
+- **Teacher** who signs in to provision and manage their own students and classes. (Collecting and reading students' texts is not yet built.)
+- **Administrator** who provisions teacher accounts and runs the server.
 
 ## Capabilities
 
@@ -37,14 +38,14 @@ In French schooling, children learn to fix spelling, agreement and conjugation b
 - **Correction mode** — a tool rail on the left offers Identify (the default), Arrow and Rewrite; with Rewrite the child selects a word and rewrites it; the old word stays crossed out with the new one above it, as on paper. Arrows and word labels are separate capabilities below.
 - **Arrows** — in correction mode the child links two words with an arrow (determiner or adjective to its noun, pronoun to its verb, ...), above or below the line, in a chosen color, and can erase or undo it. Arrows show faintly in writing mode. The page is written on every other ruled row to leave room, and arrows work across a page turn.
 - **Identify word** — in correction mode the child tells what a word is: one of ten word classes (nom, verbe, adjectif, déterminant, pronom, adverbe, préposition, conjonction, nom propre, interjection), and optionally gender and number, each chosen by hand. A small bubble of letters sits exactly above the word: the class code on top, and gender and number as a second, smaller line (for a feminine plural noun, "N" over "f p"), colored by class. Tags show faintly in writing mode.
-- **Local-only storage** — texts live in the child's browser; no accounts.
-- **Backup file** — export and import texts so a wiped browser does not lose work.
+- **Accounts and roles** — everyone signs in; administrator, teacher and student roles gate what each can do (student: own texts; teacher: manage own students and classes; administrator: manage teachers). Deny by default; see `architecture`.
+- **Server storage** — texts, overlays and corrections are stored per student on a self-contained LAN server and auto-saved, so a student signs in from any computer on the network and their work follows them. Writing stays instant and tolerates a brief server outage; nothing to export before leaving.
 - **Simple appearance settings** — paper type (lined or plain; a device setting) and text size (saved with each text).
 
 ## Non-Goals
 
 - Any automatic correction, detection or suggestion of linguistic content.
-- Accounts or server storage in the first build.
+- Any dependence on external/third-party services or APIs — the server is fully self-contained.
 
 ## Technology
 
