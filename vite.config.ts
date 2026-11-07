@@ -6,7 +6,8 @@ const CSP = [
   "style-src 'self'",
   "img-src 'self' data:",
   "font-src 'self'",
-  "connect-src 'none'",
+  // The SPA now talks to its own origin's API (same-origin only).
+  "connect-src 'self'",
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",
@@ -24,5 +25,7 @@ export default defineConfig({
     },
   ],
   build: { target: "es2022", assetsInlineLimit: 0 },
+  // Dev: the Vite client proxies the API to the Node server (run `npm run server`).
+  server: { proxy: { "/api": "http://localhost:8080" } },
   test: { environment: "jsdom", include: ["tests/**/*.test.ts"] },
 });
