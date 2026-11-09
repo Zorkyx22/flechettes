@@ -1,7 +1,7 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { extname, join, normalize, resolve } from "node:path";
+import { extname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 
 export const COOKIE = "fsid";
 /** Mutating API requests must carry this header; cross-origin callers cannot set it. */
@@ -89,7 +89,11 @@ export async function serveStatic(res: ServerResponse, clientDir: string, urlPat
   const root = resolve(clientDir);
   const requested = normalize(decodeURIComponent(urlPath));
   let filePath = join(root, requested);
-  if (!filePath.startsWith(root)) {
+  // Containment check: the resolved path must stay inside root. Using
+  // path.relative (rather than a prefix startsWith) rejects both ".." escapes
+  // and sibling directories that merely share root's name prefix.
+  const rel = relative(root, filePath);
+  if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
     res.writeHead(403).end();
     return;
   }
