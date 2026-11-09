@@ -1,5 +1,20 @@
 # Flechettes
 
+<p align="center">
+  <a href="https://0rwx.com/">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/0rwx/AI-X-dark.svg" />
+      <img alt="0rwx AI:X — AI made, human guided" src="docs/0rwx/AI-X-light.svg" width="88" />
+    </picture>
+  </a>
+</p>
+
+> **Made with AI, guided by humans.** Under the [0rwx framework](https://0rwx.com/)
+> this project is **`AI:X` — EXECUTE** ("AI made, human curates"): humans set the
+> direction and review the outcomes, and the AI writes the implementation. See
+> [How this project is made](#how-this-project-is-made) for what that means in
+> practice.
+
 A web text editor where French-speaking children write freely, then correct
 their own text by hand using the grammar-analysis techniques taught at school.
 
@@ -30,6 +45,70 @@ and their work follows them.
 - **vitest** for tests (jsdom + fake-indexeddb)
 - Self-contained **Node** server (`tsx`) backed by **SQLite**
 - No external/third-party runtime services — the server is fully self-contained
+
+## How this project is made
+
+This repository is written by AI and **guided** by humans. We label that with the
+[0rwx framework](https://0rwx.com/), a four-level vocabulary (`AI:0` ZER0 →
+`AI:R` READ → `AI:W` WRITE → `AI:X` EXECUTE) that describes *how much a human
+scrutinises the generated work*, not which tool produced it.
+
+Flechettes is **`AI:X` (EXECUTE) — "AI made, human curates."** Humans do not
+hand-write the code; they steer the work and judge the results. What keeps that
+honest and reviewable rather than a black box:
+
+- **Specs come first.** Humans own the intent and the boundaries as written
+  specs (see below); the AI implements against them.
+- **Change flows through review.** Every change lands via a pull request a human
+  curates, not a direct push to `main`.
+- **The machine checks the machine.** CI runs tests, builds an SBOM, and gates
+  merges on SCA (Interlynk) and SAST (Snyk Code) findings — see
+  [Continuous integration](#continuous-integration).
+
+The 0rwx badges are released into the public domain by their author; the copies
+under [`docs/0rwx/`](docs/0rwx/) are vendored from the
+[0rwx repository](https://github.com/NamtaoProductions/0rwx.com).
+
+## Spec-driven development
+
+The specs are the source of truth — the product is described before and as it is
+built, and any change that alters a boundary, contract or behaviour updates the
+owning spec in the same change. Each spec is a Markdown file with YAML
+frontmatter (`id`, `type`, `status`, `parent`, `depends-on`) that links it into a
+**spec graph**:
+
+- A **parent** edge places a spec in the tree (module specs hang off the
+  architecture; the architecture hangs off the goal).
+- A **depends-on** edge records which other specs a spec relies on.
+
+To understand the repo, read the specs top-down:
+
+1. [`goal-and-requirements.md`](goal-and-requirements.md) — *why* and *what*:
+   the product intent, principles, and non-goals.
+2. [`architecture.md`](architecture.md) — *how*: system design, owned
+   boundaries, and recorded decisions (`depends-on: goal-and-requirements`).
+3. The module `SPEC.md` next to the code it governs — the contracts for that one
+   module (`parent: architecture`).
+
+## Repository structure
+
+Each `src/` module carries its own spec. Read a module's `SPEC.md` before
+changing its code.
+
+| Path | Spec `id` | Owns |
+| ------------------------- | --------------------- | ------------------------------------------------------- |
+| `goal-and-requirements.md`| `goal-and-requirements` | Product intent, principles, non-goals |
+| `architecture.md`         | `architecture`        | System design, boundaries, decisions |
+| `src/model/`              | `model`               | Document model: text + overlay + history (source of truth for a text) |
+| `src/overlay/`            | `overlay`             | Correction overlay: arrows and word-class labels |
+| `src/storage/`            | `storage`             | Storage: server source of truth, offline cache, 7-day bin |
+| `src/server/`             | `server`              | LAN server: static serving, JSON API, auth, roles |
+| `src/ui/`                 | `editor-ui`           | Editor UI: list, tool rail, sheet, writing/correction modes |
+| `src/net/`                | —                     | Browser API client helpers |
+| `src/roster/`             | —                     | Roster types and helpers |
+| `tests/`                  | —                     | vitest suites |
+| `.github/workflows/`      | —                     | CI: build/test, SBOM, SCA, SAST |
+| `flake.nix`, `.envrc`     | —                     | Nix dev shell (see below) |
 
 ## Getting started
 
