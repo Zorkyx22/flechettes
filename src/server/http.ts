@@ -1,7 +1,7 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { extname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
+import { extname, join, resolve, sep } from "node:path";
 
 export const COOKIE = "fsid";
 /** Mutating API requests must carry this header; cross-origin callers cannot set it. */
@@ -87,13 +87,18 @@ const TYPES: Record<string, string> = {
  */
 export async function serveStatic(res: ServerResponse, clientDir: string, urlPath: string): Promise<void> {
   const root = resolve(clientDir);
-  const requested = normalize(decodeURIComponent(urlPath));
-  let filePath = join(root, requested);
-  // Containment check: the resolved path must stay inside root. Using
-  // path.relative (rather than a prefix startsWith) rejects both ".." escapes
-  // and sibling directories that merely share root's name prefix.
-  const rel = relative(root, filePath);
-  if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+  const requested = decodeURIComponent(urlPath);
+  // Resolve the request against the client root and confirm it stays inside it.
+  // resolve() canonicalises any ".." segments, and the startsWith check on the
+  // resolved root is the sanitiser that neutralises path traversal. The extra
+  // separator guard rejects sibling directories that merely share root's name
+  // prefix (e.g. "<root>-secret").
+  let filePath = resolve(root, `.${requested.startsWith("/") ? requested : `/${requested}`}`);
+  if (!filePath.startsWith(root)) {
+    res.writeHead(403).end();
+    return;
+  }
+  if (filePath !== root && !filePath.startsWith(root + sep)) {
     res.writeHead(403).end();
     return;
   }
