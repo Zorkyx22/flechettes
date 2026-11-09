@@ -41,6 +41,34 @@ npm run dev       # start the Vite dev server (front end)
 npm run server    # start the API server (watch mode)
 ```
 
+## Development environment (Nix)
+
+A [Nix flake](flake.nix) provides a pinned dev shell so local work (including
+automated agents) runs the same tools as CI before opening a PR.
+
+```bash
+nix develop        # enter the shell (needs Nix with flakes enabled)
+```
+
+With [direnv](https://direnv.net/) + [nix-direnv](https://github.com/nix-community/nix-direnv)
+installed, `direnv allow` auto-loads the shell on `cd` (see [`.envrc`](.envrc)).
+
+The shell provides:
+
+| Tool            | For                                                  |
+| --------------- | ---------------------------------------------------- |
+| `nodejs_24`     | `node` / `npm` / `npx`, matching the CI Node version |
+| `snyk`          | `snyk code test` — the same SAST run in CI           |
+| `cyclonedx-cli` | inspect / convert / validate CycloneDX SBOMs         |
+| `git`, `gh`     | version control and GitHub CLI (PRs, checks)         |
+| `jq`            | JSON wrangling                                        |
+
+npm dependencies are still fetched from the npm registry by `npm ci`; the flake
+only pins the tools around them. Generate an SBOM locally with
+`npx @cyclonedx/cyclonedx-npm`. The Interlynk SCA tooling (`sbommv` / `pylynk`)
+is not packaged in nixpkgs; CI runs it via Docker, and it needs server-side
+tokens, so it is not part of the local shell.
+
 ## Common scripts
 
 | Command             | What it does                                 |
