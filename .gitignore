@@ -1,5 +1,8 @@
 node_modules
 dist
+
+# direnv / nix-direnv local cache
+.direnv
 .thinkrail/context/
 
 # Runtime SQLite database (created by the server)
