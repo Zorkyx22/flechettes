@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # Weekly, Mondays 06:00 UTC — catches new CVEs against existing deps.
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  sbom-sca:
+    name: SBOM + SCA (Interlynk)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      # Install without running package lifecycle scripts while we only need the
+      # dependency tree for the SBOM.
+      - run: npm ci --ignore-scripts
+
+      # A unique, semver-valid version per run so each upload is its own version
+      # on Interlynk and `gate` can resolve exactly this run. `npm version`
+      # updates both package.json and package-lock.json so the generated SBOM's
+      # primary-component version matches.
+      - name: Set CI version
+        id: ver
+        run: |
+          VER="0.0.0-ci.${GITHUB_SHA::12}"
+          npm version "$VER" --no-git-tag-version --allow-same-version
+          echo "value=$VER" >> "$GITHUB_OUTPUT"
+
+      - name: Generate CycloneDX SBOM
+        run: npx --yes @cyclonedx/cyclonedx-npm --output-format JSON --output-file sbom.cdx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.cdx.json
+
+      # Push the SBOM to the Interlynk platform (SCA: vulnerability + license
+      # analysis and ongoing monitoring).
+      - name: Upload SBOM to Interlynk
+        env:
+          INTERLYNK_SECURITY_TOKEN: ${{ secrets.INTERLYNK_SECURITY_TOKEN }}
+        run: |
+          docker run --rm \
+            -e INTERLYNK_SECURITY_TOKEN \
+            -v "$PWD:/app/data" \
+            ghcr.io/interlynk-io/pylynk:latest \
+            upload --prod flechettes --sbom /app/data/sbom.cdx.json
+
+      # Enforce Interlynk policies on this exact version. Exit 0 = pass,
+      # 3 = policy failure, 4 = indeterminate (fail-closed). Configure a
+      # "fail"-severity policy (e.g. block high/critical vulnerabilities) in the
+      # Interlynk org for this gate to block the build.
+      - name: Interlynk policy gate
+        env:
+          INTERLYNK_SECURITY_TOKEN: ${{ secrets.INTERLYNK_SECURITY_TOKEN }}
+        run: |
+          docker run --rm \
+            -e INTERLYNK_SECURITY_TOKEN \
+            -v "$PWD:/app/data" \
+            ghcr.io/interlynk-io/pylynk:latest \
+            gate --prod flechettes --ver "${{ steps.ver.outputs.value }}"
+
+  sast:
+    name: SAST (Snyk Code)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # upload SARIF to the Security tab
+    steps:
+      - uses: actions/checkout@v4
+      - uses: snyk/actions/setup@master
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      # Fails the job on high/critical findings; SARIF is still written and
+      # uploaded via the always() step below.
+      - name: Snyk Code (SAST)
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: snyk code test --severity-threshold=high --sarif-file-output=snyk.sarif
+
+      - name: Upload Snyk SARIF to GitHub code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: snyk.sarif
